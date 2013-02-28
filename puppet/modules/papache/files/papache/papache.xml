@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<project name="Papache" default="help">
+  <property name="templateDir" value="${project.basedir}/templates"/>
+  <property name="taskDir" value="${project.basedir}/tasks"/>
+
+  <!-- Default values for properties-->
+  <property file="${project.basedir}/papache.properties"/>
+  <property name="a.docroot" value="${a.apacheroot}/${vhost}"/>
+  <property name="d.makefile" value="${templateDir}/default.make"/>
+  <property name="d.profile" value="standard"/>
+  <property name="d.pass" value="admin"/>
+    
+  <taskdef name="drush" classname="DrushTask"
+           classpath="${taskDir}/phingdrushtask"/>
+
+  <!-- Default task : display the available major targets  -->
+  <target name="help">
+<echo>
+Main targets:
+
+- vhcreate    Create a virtual host and update /etc/hosts accordingly.
+- vhdestroy   Destroy a virtual host and update /etc/hosts.
+- dcreate     Create a Drupal installation inside a vhost.
+- ddestroy    Destroy a vhost and a Drupal installation.
+
+
+Options:
+
+- vhost:      Virtual host name to create/delete, required (${vhost}).
+- o.del:      Delete docroot data on vhdestroy (${o.del}).
+
+- a.apacheroot:  Base dir for all hvosts (${a.apacheroot}).
+- a.docroot:     Docroot, by default "apacheroot"/"vhost" (${a.docroot}).
+- a.chownfiles:  Change owner:group of files in docroot (${a.chownfiles})
+-- a.owner:       Docroot owner (${a.owner}).
+-- a.group:       Docroot group (${a.group}).
+
+- m.user:     MySQL user (${m.user}).
+- m.pwd:      MySQL password (${m.pwd}).
+- m.host:     MySQL host (${m.host}).
+
+- d.makefile: Drupal makefile, if any (${d.makefile}).
+- d.profile:  Drupal instal profile (${d.profile}).
+- d.pass:      Drupal admin password (${d.pass}).
+</echo>
+  </target>
+
+  <!-- Major target: Install Drupal and create the virtual host -->
+  <target name="dcreate" depends="validateVHost">
+    <phingCall target="drupalDownloadInstall"/>
+    <phingCall target="vhcreate"/>
+  </target>
+
+  <target name="ddestroy" depends="validateVHost">
+    <phingCall target="vhdestroy"/>
+    <phingCall target="drupalDBDestroy"/>
+  </target>
+
+  <!-- Major target: Virtual host creation-->
+  <target name="vhcreate" depends="validateVHost"> 
+    <echo message="Creating (if it doesn't exist) the ${vhost} virtual host at ${a.docroot}"/>
+    
+    <mkdir dir="${a.docroot}"/>
+    <if>
+      <isTrue value="${a.chownfiles}"/>
+      <then>
+        <chown file="${a.docroot}" 
+               user="${a.owner}.${a.group}" 
+               verbose="true" 
+               failonerror="false"/>
+      </then>
+    </if>
+
+    <!-- write vhosts file with the information -->    
+    <echo message="Creating virtual host ${vhost}"/>
+    <copy file="${templateDir}/vhost_template.conf" 
+          tofile="/etc/apache2/sites-available/${vhost}.conf" 
+          overwrite="true">
+      <filterchain>
+        <replaceregexp>
+          <regexp pattern="##SERVNAME##" replace="${vhost}" ignoreCase="true" />
+          <regexp pattern="##DOCROOT##" replace="${a.docroot}" ignoreCase="false" />
+        </replaceregexp>
+      </filterchain> 
+    </copy>
+ 
+    <!-- apply site and reload apache configs -->
+    <exec command="a2ensite ${vhost}.conf" />
+    <exec command="/etc/init.d/apache2 reload" />
+
+    <!-- update hosts file -->
+    <phingCall target="addLocalhost"/>
+  </target>
+
+
+  <!-- Major target: Delete an existing virtual host, but keep the docroot data directory -->
+  <target name="vhdestroy" depends="validateVHost"> 
+    <!-- Remove vhost a2 settings & file-->
+    <echo message="Deleting virtual host ${vhost}"/>
+    <exec command="a2dissite ${vhost}.conf"/>
+    <exec command="/etc/init.d/apache2 reload"/>
+    <delete file="/etc/apache2/sites-available/${vhost}.conf"/>
+    
+    <!-- Remove /etc/hosts entry
+         It is simple and faster to use sed instead of a reflexive task and filterchains -->
+    <php expression="str_replace('.','\.', '${vhost}')" returnProperty="cleanVhostname"/>
+    <exec command="sed -i '/${cleanVhostname}/d' /etc/hosts"/>
+
+    <!-- Delete docroot -->
+    <if>
+      <isTrue value="${o.del}"/>
+      <then>
+        <phingCall target="deleteDocroot"/>
+      </then>
+    </if>
+  </target>
+
+  <!-- Create a new drupal installation using drush make and drush site-install -->
+  <target name="drupalDownloadInstall" depends="validateVHost">
+    <echo message="Building Drupal using the '${d.makefile} makefile"/> 
+    <!-- The virtual host directory will be recreated by drush make -->
+    <phingCall target="deleteDocroot"/>
+    <drush command="make" assume="yes">
+      <param>${d.makefile}</param>
+      <param>${a.docroot}</param>
+    </drush>
+
+    <!-- Make sure the site files belong to a given user and not root -->
+    <if>
+      <isTrue value="${a.chownfiles}"/>
+      <then>
+        <chown user="${a.owner}.${a.group}" 
+               verbose="false" 
+               failonerror="false">
+          <fileset dir="${a.docroot}"/>
+        </chown>
+      </then>
+    </if>
+
+    <!-- Don't use dots in the database name -->
+    <php expression="str_replace('.','_', '${vhost}')" returnProperty="dbname"/>
+    <drush command="site-install" assume="yes">
+      <option name="root">${a.docroot}</option>
+      <option name="db-url">mysql://${m.user}:${m.pwd}@${m.host}/${dbname}</option>
+      <option name="account-pass">${d.pass}</option>
+      <param>${d.profile}</param> 
+    </drush>
+  </target>
+
+  <target name="drupalDBDestroy" depends="validateVHost">
+    <!-- Don't use dots in the database name -->
+    <php expression="str_replace('.','_', '${vhost}')" returnProperty="dbname"/>
+    <exec command="mysqladmin -u${m.user} -p${m.pwd} drop ${dbname}" passthru="true"/>    
+  </target>
+
+  <!-- Add the virtual host entry to the /etc/hosts file -->
+  <target name="addLocalhost" depends="validateVHost">
+    <append destFile="/etc/hosts" text="${line.separator}127.0.0.1  ${vhost}${line.separator}" />
+  </target>
+
+  <!-- Delete a docroot directory: chmod 755 to make sure we can delete -->
+  <target name="deleteDocroot">
+    <if>
+      <available file="${a.docroot}" type='dir'/>
+      <then>
+        <chmod quiet="true" mode="0755" verbose="false">
+          <fileset dir="${a.docroot}" includes=".,*,**/*"/>
+        </chmod>      
+        <delete dir="${a.docroot}" quiet="true" includeemptydirs="true"/>
+       </then>
+    </if> 
+  </target>
+
+
+  <target name="validateVHost">
+    <fail unless="vhost" message="No virtual host name! Check the help text for options." />
+  </target>
+</project>
