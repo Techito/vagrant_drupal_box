@@ -15,15 +15,18 @@ Setup - as a vagrant config
 
 - Install Virtualbox and Vagrant.  
 
-- Create a directory to work in.```
-  mkdir -p ~/Development/foo
-  cd ~/Development/foo
+- Create a directory to work in.  
+  ```  
+  mkdir -p ~/Development/foo  
+  cd ~/Development/foo  
   ```  
 
-- Checkout the Vagrant config environment to the current working directory.```
-  git clone https://github.com/Techito/vagrant_drupal_box.git .
+- Checkout the Vagrant config environment to the current working directory.
   ```  
-- Start up and provision the vagrant VM.  ```
-  vagrant init
+  git clone https://github.com/Techito/vagrant_drupal_box.git .  
+  ```  
+- Start up and provision the vagrant VM.  
+  ```  
+  vagrant init  
   ```  
 
