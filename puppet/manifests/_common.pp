@@ -20,3 +20,4 @@ stage {"pre": before => Stage["main"]}
 
 # Ensure apt updates before running the main installation routine.
 class {'apt': stage => 'pre'}
+class {'pre': stage => 'pre'}

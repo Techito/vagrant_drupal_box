@@ -12,6 +12,10 @@ Vagrant::Config.run do |config|
   # Add a host-only network adapter, for samba etc.
   config.vm.network :hostonly, "192.168.33.10"
 
+  # Ensure the project directory is shared with the guest.
+  # Use of :owner and :group is an undocumented API referenced in
+  # http://stackoverflow.com/questions/13566201
+  config.vm.share_folder "project", "/mnt/shared_project_directory", "./project", :owner => "vagrant", :group => "www-data", :extra => "dmode=775,fmode=775"
 
   # Configure puppet.
   box_path = File.expand_path(__FILE__ + '/..')

@@ -57,6 +57,12 @@ node drupal_template {
   package { 'php5-xdebug': }
 
 
+  # Add the vagrant user to the 'www-data' group, so it can write to
+  # directories managed by apache.
+  user {'vagrant':
+    groups => ['www-data'],
+  }
+
   # Add Phing.
   class {'phing': }
   class {'papache':
@@ -70,13 +76,6 @@ node drupal_template {
   # Add PhpMyAdmin.
   class { 'phpmyadmin':
     require => Package[mysql-server],
-  }
-
-  # The /srv path should be fully owned/writable by the vagrant user.
-  file { '/srv' :
-    ensure => 'directory',
-    owner => 'vagrant',
-    group => 'vagrant',
   }
 
   # Ensure that mod-rewrite is enabled.
