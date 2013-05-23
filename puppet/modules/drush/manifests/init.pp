@@ -36,7 +36,8 @@ class drush {
         command => "git clone --branch $drush::params::branch_name http://git.drupal.org/project/drush.git",
         creates => '/tmp/drush',
         require => Package['php5-cli', 'php-pear', 'Console_Table', 'git'], 
-        path => ["/bin", "/usr/bin", "/usr/sbin"]
+        path => ["/bin", "/usr/bin", "/usr/sbin"],
+        unless => "test -f /usr/local/lib/drush",
     }
 
     file { '/usr/local/lib/drush':
