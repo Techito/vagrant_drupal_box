@@ -27,6 +27,6 @@ Setup - as a vagrant config
   ```  
 - Start up and provision the vagrant VM.  
   ```  
-  vagrant init  
+  vagrant up  
   ```  
 
