@@ -5,6 +5,7 @@ Vagrant::Config.run do |config|
 
   # Based on the Ubuntu Precise base-box
   config.vm.box = "ubuntu-precise"
+  config.vm.box_url = "http://files.vagrantup.com/precise32.box"
 
   # Set a hostname.
   config.vm.host_name = "vm-druprecise"
